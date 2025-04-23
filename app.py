@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error
 
 # ======= モデル処理関数 =======
 
@@ -36,7 +35,7 @@ st.title("🌡️ T_surface 多点予測アプリ")
 
 # 学習用CSVアップロード
 st.header("1️⃣ 学習用CSVをアップロード（複数可）")
-train_files = st.file_uploader("T_internal, T_surface を含む CSV ファイルを複数選択", type="csv", accept_multiple_files=True)
+train_files = st.file_uploader("T_internal, T_surface を含む CSV を複数選択", type="csv", accept_multiple_files=True)
 
 model = None
 if train_files:
@@ -55,18 +54,19 @@ if train_files:
         st.success(f"✅ 学習完了：{len(dfs)}ファイル、{len(X_train)} サンプル")
 
 # 予測用CSVアップロード
-st.header("2️⃣ 予測用CSVをアップロード（T_internal1〜5 を含む）")
+st.header("2️⃣ 予測用CSVをアップロード（T_internal1〜5）")
 test_file = st.file_uploader("予測対象のCSV", type="csv")
 
 if model and test_file:
     test_df = pd.read_csv(test_file)
     time_col = test_df["time"] if "time" in test_df.columns else test_df.index
 
-    # 内部温度列（T_internal1〜5）を抽出
+    # 内部温度列を検出
     internal_cols = [col for col in test_df.columns if col.startswith("T_internal")]
     if not internal_cols:
         st.error("T_internal1 ～ T_internal5 のような列が必要です")
 
+    # 予測処理
     all_preds = []
     for col in internal_cols:
         pred_df = predict_from_column(test_df, col, model)
@@ -78,26 +78,27 @@ if model and test_file:
     st.subheader("📊 予測結果プレビュー")
     st.dataframe(result_df.head())
 
-    # グラフ描画（各センサの T_internalX と予測T_surfaceX をペアで）
-    st.subheader("📈 各センサの内部温度と予測表面温度")
+    # === グラフ（ペア別5分割） ===
+    st.subheader("📈 各センサの内部温度と予測表面温度（ペア別グラフ）")
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, axes = plt.subplots(nrows=len(internal_cols), ncols=1, figsize=(10, 2.5 * len(internal_cols)), sharex=True)
     time = result_df["time"]
 
-    for col in internal_cols:
+    for idx, col in enumerate(internal_cols):
+        ax = axes[idx]
         pred_col = f"Predicted_T_surface_{col}"
-        if col in test_df.columns and pred_col in result_df.columns:
-            ax.plot(time, test_df[col][len(test_df) - len(time):].values, label=col, linestyle="-", linewidth=1.2)
-            ax.plot(time, result_df[pred_col], label=pred_col, linestyle="--", linewidth=1.4)
+        internal_trimmed = test_df[col][len(test_df) - len(time):].values
 
-    ax.set_xlabel("時間 [s]")
-    ax.set_ylabel("温度 [°C]")
-    ax.set_title("T_internal 各点と予測された T_surface")
-    ax.legend(ncol=2)
+        ax.plot(time, internal_trimmed, label=f"{col}", color="tab:blue")
+        ax.plot(time, result_df[pred_col], label=f"{pred_col}", color="tab:red", linestyle="--")
+        ax.set_ylabel("温度 [°C]")
+        ax.set_title(f"{col} vs Predicted Surface")
+        ax.legend(loc="upper right")
+
+    axes[-1].set_xlabel("時間 [s]")
     st.pyplot(fig)
 
-
-    # CSV出力
+    # === CSV出力 ===
     st.subheader("💾 予測結果CSVのダウンロード")
     csv_bytes = result_df.to_csv(index=False).encode("utf-8")
     st.download_button(
