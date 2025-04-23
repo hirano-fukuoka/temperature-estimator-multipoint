@@ -78,6 +78,25 @@ if model and test_file:
     st.subheader("📊 予測結果プレビュー")
     st.dataframe(result_df.head())
 
+    # グラフ描画（各センサの T_internalX と予測T_surfaceX をペアで）
+    st.subheader("📈 各センサの内部温度と予測表面温度")
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    time = result_df["time"]
+
+    for col in internal_cols:
+        pred_col = f"Predicted_T_surface_{col}"
+        if col in test_df.columns and pred_col in result_df.columns:
+            ax.plot(time, test_df[col][len(test_df) - len(time):].values, label=col, linestyle="-", linewidth=1.2)
+            ax.plot(time, result_df[pred_col], label=pred_col, linestyle="--", linewidth=1.4)
+
+    ax.set_xlabel("時間 [s]")
+    ax.set_ylabel("温度 [°C]")
+    ax.set_title("T_internal 各点と予測された T_surface")
+    ax.legend(ncol=2)
+    st.pyplot(fig)
+
+
     # CSV出力
     st.subheader("💾 予測結果CSVのダウンロード")
     csv_bytes = result_df.to_csv(index=False).encode("utf-8")
